@@ -1,0 +1,3 @@
+#!/bin/sh
+export LD_PRELOAD=/home/paw/projects/desktop_mate_fix/libmatepagerfix.so
+exec /usr/lib/mate-panel/wnck-applet "$@"

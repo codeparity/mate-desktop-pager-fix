@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+set -e
+
+CONFIG_FILE="${MATE_PAGER_CONFIG:-$HOME/.config/mate-pager.conf}"
+
+get_val() {
+    local key="$1"
+    local default="$2"
+    if [ -f "$CONFIG_FILE" ]; then
+        local val
+        val=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" | head -n1 | cut -d'=' -f2 | tr -d '[:space:]')
+        if [ -n "$val" ]; then
+            echo "$val"
+            return
+        fi
+    fi
+    echo "$default"
+}
+
+set_val() {
+    local key="$1"
+    local val="$2"
+    mkdir -p "$(dirname "$CONFIG_FILE")"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        cat << 'EOF' > "$CONFIG_FILE"
+# MATE Desktop Pager (Workspace Switcher) Size Configuration
+# Changes to this file take effect automatically within 2 seconds.
+min_width_per_workspace = 50
+min_total_width = 200
+max_width = 200
+EOF
+    fi
+
+    if grep -q -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE"; then
+        sed -i -E "s|^[[:space:]]*${key}[[:space:]]*=.*|${key} = ${val}|" "$CONFIG_FILE"
+    else
+        echo "${key} = ${val}" >> "$CONFIG_FILE"
+    fi
+}
+
+show_status() {
+    echo "=========================================================="
+    echo " MATE Desktop Pager (Workspace Switcher) Configuration"
+    echo "=========================================================="
+    echo "Configuration file: $CONFIG_FILE"
+    echo ""
+    echo "Current settings:"
+    echo "  min_width_per_workspace : $(get_val min_width_per_workspace 50) px"
+    echo "  min_total_width         : $(get_val min_total_width 200) px"
+    echo "  max_width               : $(get_val max_width 200) px"
+    echo ""
+
+    if command -v xwininfo >/dev/null 2>&1; then
+        echo "Active panel applets (wnck-applet):"
+        xwininfo -root -tree 2>/dev/null | grep -i "wnck-applet" | grep -v "10x10" | while read -r line; do
+            echo "  $line"
+        done
+    fi
+    echo ""
+    echo "Tip: Changes applied to $CONFIG_FILE are picked up automatically within 2 seconds."
+}
+
+show_help() {
+    cat << EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Options:
+  -g, --get                  Show current configuration and live pager dimensions
+  -w, --workspace <pixels>   Set minimum width per workspace column (e.g. 50, 75, 100)
+  -t, --total <pixels>       Set minimum total width for the entire pager (e.g. 200, 300)
+  -m, --max <pixels>         Set maximum width for the entire pager (e.g. 200, 400; 0 to disable)
+  -r, --reset                Reset configuration to default values (workspace: 50px, total: 200px, max: 200px)
+  -h, --help                 Display this help message
+
+Examples:
+  $(basename "$0") --get
+  $(basename "$0") --total 200
+  $(basename "$0") --max 200
+  $(basename "$0") --workspace 50
+EOF
+}
+
+if [ $# -eq 0 ]; then
+    show_status
+    exit 0
+fi
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -g|--get)
+            show_status
+            exit 0
+            ;;
+        -w|--workspace)
+            if [ -z "$2" ] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                echo "Error: --workspace requires a positive integer (pixels)." >&2
+                exit 1
+            fi
+            set_val "min_width_per_workspace" "$2"
+            echo "Updated min_width_per_workspace to $2 px."
+            shift 2
+            ;;
+        -t|--total)
+            if [ -z "$2" ] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                echo "Error: --total requires a positive integer (pixels)." >&2
+                exit 1
+            fi
+            set_val "min_total_width" "$2"
+            echo "Updated min_total_width to $2 px."
+            shift 2
+            ;;
+        -m|--max)
+            if [ -z "$2" ] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                echo "Error: --max requires a positive integer or 0 (pixels)." >&2
+                exit 1
+            fi
+            set_val "max_width" "$2"
+            echo "Updated max_width to $2 px."
+            shift 2
+            ;;
+        -r|--reset)
+            set_val "min_width_per_workspace" 50
+            set_val "min_total_width" 200
+            set_val "max_width" 200
+            echo "Configuration reset to defaults (workspace: 50px, total: 200px, max: 200px)."
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            show_help
+            exit 1
+            ;;
+    esac
+done
